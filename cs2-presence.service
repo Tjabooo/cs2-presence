@@ -1,5 +1,5 @@
 [Unit]
-Description=Show native Linux CS2 as your Discord activity
+Description=Discord Rich Presence for native Linux CS2
 PartOf=graphical-session.target
 After=graphical-session.target
 
