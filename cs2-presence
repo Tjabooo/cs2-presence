@@ -303,7 +303,7 @@ def build_activity(game, data, tracker):
         assets['large_image'] = f'{MAP_IMAGES}/{base}.png'
         assets['large_text'] = text(' · '.join(hover))
     if team in ('CT', 'T') and 'large_image' in assets:
-        assets['small_image'] = f'{ASSETS}/{team.lower()}.png'
+        assets['small_image'] = f'{ASSETS}/{team.lower()}.png?v=1'
         state = player.get('state') or {}
         if own and int(state.get('health', 0)) > 0:
             bits = [TEAMS[team], f"{state.get('health', 0)} HP"]
