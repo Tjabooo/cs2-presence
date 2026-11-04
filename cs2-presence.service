@@ -1,0 +1,13 @@
+[Unit]
+Description=Show native Linux CS2 as your Discord activity
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/cs2-presence
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical-session.target

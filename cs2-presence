@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""cs2-presence: show native Linux Counter-Strike 2 as "Playing Counter-Strike 2" in Discord.
+
+Discord doesn't detect CS2's native Linux build, so this checks every 5 s whether `cs2` is running
+and, while it is, publishes the activity through Discord's local RPC socket (with the time the game
+started). Standard library only; runs as a systemd user service.
+"""
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import struct
+import time
+import uuid
+
+CLIENT_ID = "1158877933042143272"  # Discord's Counter-Strike 2 application.
+running = True
+
+
+def find_game():
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            if proc.stat().st_uid != os.getuid() or proc.joinpath('comm').read_text().strip() != 'cs2':
+                continue
+            if proc.joinpath('exe').resolve().name != 'cs2':
+                continue
+            ticks = int(proc.joinpath('stat').read_text().rsplit(')', 1)[1].split()[19])
+            uptime = float(Path('/proc/uptime').read_text().split()[0])
+            return int(proc.name), int(time.time() - uptime + ticks / os.sysconf('SC_CLK_TCK'))
+        except (OSError, ValueError, IndexError):
+            continue
+    return None
+
+
+def send_frame(sock, opcode, data):
+    payload = json.dumps(data, separators=(',', ':')).encode()
+    sock.sendall(struct.pack('<II', opcode, len(payload)) + payload)
+
+
+def receive_exact(sock, size):
+    result = bytearray()
+    while len(result) < size:
+        chunk = sock.recv(size - len(result))
+        if not chunk:
+            raise ConnectionError('RPC socket closed')
+        result.extend(chunk)
+    return bytes(result)
+
+
+def receive_frame(sock):
+    while True:
+        opcode, size = struct.unpack('<II', receive_exact(sock, 8))
+        if size > 1024 * 1024:
+            raise ValueError('RPC frame too large')
+        data = json.loads(receive_exact(sock, size))
+        if opcode == 3:
+            send_frame(sock, 4, data)
+        elif opcode == 2 or data.get('evt') == 'ERROR':
+            raise ConnectionError('RPC request rejected')
+        else:
+            return data
+
+
+def connect():
+    runtime = Path(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'))
+    # Native Discord (and Vesktop/arRPC), then the Flatpak and Snap sandboxes' sockets.
+    sockets = [*sorted(runtime.glob('discord-ipc-*')), *sorted(runtime.glob('app/*/discord-ipc-*')),
+               *sorted(runtime.glob('snap.discord*/discord-ipc-*'))]
+    for path in sockets:
+        sock = socket.socket(socket.AF_UNIX)
+        sock.settimeout(3)
+        try:
+            sock.connect(str(path))
+            send_frame(sock, 0, {'v': 1, 'client_id': CLIENT_ID})
+            if receive_frame(sock).get('evt') != 'READY':
+                raise ConnectionError('RPC was not ready')
+            return sock
+        except (OSError, ValueError, ConnectionError):
+            sock.close()
+    raise ConnectionError('Discord RPC unavailable')
+
+
+def set_activity(sock, game):
+    pid, started = game
+    nonce = str(uuid.uuid4())
+    send_frame(sock, 1, {
+        'cmd': 'SET_ACTIVITY', 'nonce': nonce,
+        'args': {'pid': pid, 'activity': None if started is None else {
+            'type': 0, 'name': 'Counter-Strike 2', 'timestamps': {'start': started},
+        }},
+    })
+    while receive_frame(sock).get('nonce') != nonce:
+        pass
+
+
+def stop(_signum, _frame):
+    global running
+    running = False
+
+
+def main():
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    sock = None
+    published = None
+    try:
+        while running:
+            game = find_game()
+            try:
+                if game:
+                    if sock is None:
+                        sock = connect()
+                        published = None
+                    # Re-send periodically so activity survives client reconnects.
+                    set_activity(sock, game)
+                    if published != game:
+                        print('CS2 activity started', flush=True)
+                    published = game
+                elif sock:
+                    if published:
+                        set_activity(sock, (published[0], None))
+                        print('CS2 activity cleared', flush=True)
+                    sock.close()
+                    sock = published = None
+            except (OSError, ValueError, ConnectionError):
+                if sock:
+                    sock.close()
+                sock = published = None
+            time.sleep(5)
+    finally:
+        if sock:
+            try:
+                if published:
+                    set_activity(sock, (published[0], None))
+            except (OSError, ValueError, ConnectionError):
+                pass
+            sock.close()
+
+
+if __name__ == '__main__':
+    main()
