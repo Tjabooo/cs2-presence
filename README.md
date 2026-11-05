@@ -24,6 +24,12 @@ clears.
 - Works with the Discord client, Vesktop/arRPC, and the Flatpak or Snap Discord.
 - Checks every 5 seconds whether `cs2` runs as your user. It costs nothing while you aren't playing.
 
+## Requirements
+
+- Linux with a systemd user session, Python 3 (standard library only).
+- The Discord desktop client (or Vesktop/arRPC) running on the same machine.
+- The native Linux build of CS2 through Steam.
+
 ## Install
 
 ```sh
@@ -53,7 +59,8 @@ the game's start time from `/proc`.
 At startup it writes `gamestate_integration_cs2_presence.cfg` into CS2's `game/csgo/cfg` folder in
 every Steam library it finds (native, Flatpak and Snap Steam). CS2 then posts the game state (map,
 round, your player) to `http://127.0.0.1:3713/` about once a second while it changes; set
-`CS2_PRESENCE_PORT` in the service to use another port. Your own stats are remembered while the game
+`CS2_PRESENCE_PORT` in the service to use another port (`systemctl --user edit cs2-presence`, then
+`[Service]` / `Environment=CS2_PRESENCE_PORT=3714`). Your own stats are remembered while the game
 reports the player you're spectating.
 
 It connects to the first Discord IPC socket it finds (`$XDG_RUNTIME_DIR/discord-ipc-*`, or inside
@@ -67,4 +74,4 @@ maps without one show the CS2 icon. The team badges are in `assets/`.
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).
