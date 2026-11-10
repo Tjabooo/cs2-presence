@@ -1,0 +1,21 @@
+[package]
+name = "cs2-presence"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Native Linux Counter-Strike 2 as Discord Rich Presence"
+license = "MIT"
+repository = "https://github.com/Tjabooo/cs2-presence"
+readme = "README.md"
+keywords = ["discord", "rich-presence", "cs2", "linux"]
+categories = ["command-line-utilities", "games"]
+
+[dependencies]
+libc = "0.2"
+serde_json = "1"
+signal-hook = "0.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

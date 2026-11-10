@@ -17,8 +17,8 @@ Counter-Strike 2**:
 In the main menu it shows `In the main menu` and your in-game name. When the game closes, the status
 clears.
 
-- One small Python script, standard library only, no Discord token or login: it talks to the Discord
-  client on your own machine through its local RPC socket, the way games do.
+- One small Rust binary (about 600 KB, a few MB of memory), no Discord token or login: it talks to
+  the Discord client on your own machine through its local RPC socket, the way games do.
 - Match details come from CS2's own **Game State Integration**, the Valve-supported feed that
   tournament overlays use. It isn't a cheat and doesn't touch the game's memory.
 - Works with the Discord client, Vesktop/arRPC, and the Flatpak or Snap Discord.
@@ -26,13 +26,15 @@ clears.
 
 ## Install
 
+Needs Rust 1.88 or newer to build (`pacman -S rust`, `apt install cargo`, or [rustup](https://rustup.rs)).
+
 ```sh
 git clone https://github.com/Tjabooo/cs2-presence.git
 cd cs2-presence
 ./install.sh
 ```
 
-This puts `cs2-presence` in `~/.local/bin` and enables a systemd user service that starts with your
+This builds the binary, puts it in `~/.local/bin` and enables a systemd user service that starts with your
 graphical session. Logs: `journalctl --user -u cs2-presence`.
 
 Start the service before CS2 (it writes the Game State Integration config, which the game reads at
@@ -41,6 +43,8 @@ launch). If CS2 was already running when you installed, restart the game once to
 Discord must allow it: User Settings → Activity Privacy → **Share your detected activities with
 others** on. Discord shows only one game activity at a time, the one that connected first: if another
 game (for example Roblox through Sober) is already showing, CS2 stays hidden until that one closes.
+
+Update: `git pull && ./install.sh` (it restarts the service).
 
 Remove: `systemctl --user disable --now cs2-presence && rm ~/.local/bin/cs2-presence ~/.config/systemd/user/cs2-presence.service`,
 then delete `gamestate_integration_cs2_presence.cfg` from CS2's `game/csgo/cfg` folder.
@@ -64,6 +68,18 @@ cleared when the game exits or the service stops.
 
 Map pictures come from [ghostcap-gaming/cs2-map-images](https://github.com/ghostcap-gaming/cs2-map-images);
 maps without one show the CS2 icon. The team badges are in `assets/`.
+
+## Development
+
+```sh
+cargo test                                  # activity building, GSI listener, a fake Discord socket
+cargo clippy --all-targets -- -D warnings
+cargo run                                   # run in the foreground (stop the service first)
+```
+
+The code: `src/game.rs` finds the game and writes the GSI config, `src/gsi.rs` receives the game
+state, `src/activity.rs` turns it into the card, `src/discord.rs` speaks Discord's IPC protocol and
+`src/main.rs` ties them together. Dependencies: `serde_json`, `signal-hook` and `libc`.
 
 ## License
 
